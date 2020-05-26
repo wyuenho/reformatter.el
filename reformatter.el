@@ -83,7 +83,7 @@ otherwise as it cannot create intermediate directories."
   (make-temp-file
    (replace-regexp-in-string "/" "_" (symbol-name sym))))
 
-(defun reformatter--do-region (name beg end program args stdin stdout input-file exit-code-success-p display-errors &optional working-directory)
+(defun reformatter--do-region (name beg end program args stdin stdout input-file exit-code-success-p display-errors working-directory output-processor)
   "Do the work of reformatter called NAME.
 Reformats the current buffer's region from BEG to END using PROGRAM and
 ARGS. When DISPLAY-ERRORS is non-nil, shows a buffer if the formatting
@@ -91,6 +91,7 @@ fails. For args STDIN, STDOUT, INPUT-FILE, EXIT-CODE-SUCCESS-P and
 WORKING-DIRECTORY see the documentation of the `reformatter-define' macro."
   (cl-assert input-file)
   (cl-assert (functionp exit-code-success-p))
+  (cl-assert (or (null output-processor) (functionp exit-code-success-p)))
   (when (and input-file
              (buffer-file-name)
              (string= (file-truename input-file)
@@ -131,9 +132,19 @@ WORKING-DIRECTORY see the documentation of the `reformatter-define' macro."
                     ;; disruption to marker positions and the
                     ;; undo list
                     (narrow-to-region beg end)
-                    (reformatter-replace-buffer-contents-from-file (if stdout
-                                                                       stdout-file
-                                                                     input-file)))
+                    (let* ((output-file (if stdout stdout-file input-file))
+                           result-file
+                           (result-callback (lambda (output)
+                                              (setq result-file
+                                                    (and output
+                                                         (reformatter-temp-file-in-current-directory nil output))))))
+                      (if (functionp output-processor)
+                          (progn
+                            (funcall output-processor output-file result-callback)
+                            (when result-file
+                              (reformatter-replace-buffer-contents-from-file result-file)
+                              (delete-file result-file)))
+                        (reformatter-replace-buffer-contents-from-file output-file))))
                   ;; If there are no errors then we hide the error buffer
                   (delete-windows-on error-buffer))
               (if display-errors
@@ -143,7 +154,7 @@ WORKING-DIRECTORY see the documentation of the `reformatter-define' macro."
       (delete-file stdout-file))))
 
 ;;;###autoload
-(cl-defmacro reformatter-define (name &key program args (mode t) (stdin t) (stdout t) input-file lighter keymap group (exit-code-success-p 'zerop) working-directory)
+(cl-defmacro reformatter-define (name &key program args (mode t) (stdin t) (stdout t) input-file lighter keymap group (exit-code-success-p 'zerop) working-directory output-processor)
   "Define a reformatter command with NAME.
 
 When called, the reformatter will use PROGRAM and any ARGS to
@@ -241,10 +252,18 @@ WORKING-DIRECTORY
 
   Directory where your reformatter program is started. If provided, this
   should be a form that evaluates to a string at runtime. Default is the
-  value of `default-directory' in the buffer."
+  value of `default-directory' in the buffer.
   (declare (indent defun))
+
+OUTPUT-PROCESSOR
+
+  If provided, this is a function that takes the output PROGRAM,
+  do some arbitrary processing to it, and then return the final
+  output.  If not supplied, the output is returned as is."
+  (declare (indent defun) (debug (name :program :args :mode :stdin :stdout :input-file :lighter :keymap :group :exit-code-success-p :working-directory :output-processor)))
   (cl-assert (symbolp name))
   (cl-assert (functionp exit-code-success-p))
+  (cl-assert (or (null output-processor) (functionp exit-code-success-p)))
   (cl-assert program)
   ;; Note: we skip using `gensym' here because the macro arguments are only
   ;; referred to once below, but this may have to change later.
@@ -292,7 +311,7 @@ DISPLAY-ERRORS, shows a buffer if the formatting fails."
                  (reformatter--do-region
                   ',name beg end
                   ,program ,args ,stdin ,stdout input-file
-                  #',exit-code-success-p display-errors ,working-directory))
+                  #',exit-code-success-p display-errors ,working-directory #',output-processor))
              (when (file-exists-p input-file)
                (delete-file input-file)))))
 
@@ -316,10 +335,12 @@ DISPLAY-ERRORS, shows a buffer if the formatting fails."
   ;; degree.
   (insert-file-contents file nil nil nil t))
 
-(defun reformatter-temp-file (&optional default-extension)
+(defun reformatter-temp-file (&optional default-extension text)
   "Make a temp file re-using the current extension.
 If the current file is not backed by a file, then use
 DEFAULT-EXTENSION, which should not contain a leading dot.
+
+TEXT is the content to write to the temp file.
 
 The working directory for the command will always be the
 `default-directory' of the calling buffer."
@@ -328,14 +349,17 @@ The working directory for the command will always be the
                      default-extension)))
     (make-temp-file "reformatter" nil
                     (when extension
-                      (concat "." extension)))))
+                      (concat "." extension))
+                    text)))
 
-(defun reformatter-temp-file-in-current-directory (&optional default-extension)
+(defun reformatter-temp-file-in-current-directory (&optional default-extension text)
   "Make a temp file in the current directory re-using the current extension.
 If the current file is not backed by a file, then use
-DEFAULT-EXTENSION, which should not contain a leading dot."
+DEFAULT-EXTENSION, which should not contain a leading dot.
+
+TEXT is the content to write to the temp file."
   (let ((temporary-file-directory default-directory))
-    (reformatter-temp-file default-extension)))
+    (reformatter-temp-file default-extension text)))
 
 (provide 'reformatter)
 ;;; reformatter.el ends here
