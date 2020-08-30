@@ -121,7 +121,9 @@ the `reformatter-define' macro."
                     ;; undo list
                     (narrow-to-region beg end)
                     (reformatter-replace-buffer-contents-from-file
-                     (funcall output-processor (if stdout stdout-file input-file))))
+                     (if (functionp output-processor)
+                         (funcall output-processor input-file (if stdout stdout-file input-file))
+                       input-file)))
                   ;; If there are no errors then we hide the error buffer
                   (delete-windows-on error-buffer))
               (if display-errors
@@ -131,7 +133,7 @@ the `reformatter-define' macro."
       (delete-file stdout-file))))
 
 ;;;###autoload
-(cl-defmacro reformatter-define (name &key program args (mode t) (stdin t) (stdout t) input-file lighter keymap group (exit-code-success-p 'zerop) (output-processor 'identity))
+(cl-defmacro reformatter-define (name &key program args (mode t) (stdin t) (stdout t) input-file lighter keymap group (exit-code-success-p 'zerop) output-processor)
   "Define a reformatter command with NAME.
 
 When called, the reformatter will use PROGRAM and any ARGS to
@@ -232,7 +234,6 @@ OUTPUT-PROCESSOR
   (declare (indent defun) (debug (name :program :args :mode :group :lighter :keymap :exit-code-success-p :output-post-processor)))
   (cl-assert (symbolp name))
   (cl-assert (functionp exit-code-success-p))
-  (cl-assert (functionp output-processor))
   (cl-assert program)
   ;; Note: we skip using `gensym' here because the macro arguments are only
   ;; referred to once below, but this may have to change later.
