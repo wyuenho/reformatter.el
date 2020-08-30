@@ -120,11 +120,18 @@ the `reformatter-define' macro."
                     ;; disruption to marker positions and the
                     ;; undo list
                     (narrow-to-region beg end)
-                    (let ((output-file (if stdout stdout-file input-file)))
+                    (let* ((output-file (if stdout stdout-file input-file))
+                           result-file
+                           (result-callback (lambda (output)
+                                              (setq result-file
+                                                    (and output
+                                                         (reformatter-temp-file-in-current-directory nil output))))))
                       (if (functionp output-processor)
-                          (let ((processed-output-file (funcall output-processor output-file)))
-                            (when processed-output-file
-                              (reformatter-replace-buffer-contents-from-file processed-output-file)))
+                          (progn
+                            (funcall output-processor output-file result-callback)
+                            (when result-file
+                              (reformatter-replace-buffer-contents-from-file result-file)
+                              (delete-file result-file)))
                         (reformatter-replace-buffer-contents-from-file output-file))))
                   ;; If there are no errors then we hide the error buffer
                   (delete-windows-on error-buffer))
@@ -309,7 +316,7 @@ DISPLAY-ERRORS, shows a buffer if the formatting fails."
   (insert-file-contents file nil nil nil t))
 
 
-(defun reformatter-temp-file-in-current-directory (&optional default-extension)
+(defun reformatter-temp-file-in-current-directory (&optional default-extension text)
   "Make a temp file in the current directory re-using the current extension.
 If the current file is not backed by a file, then use
 DEFAULT-EXTENSION, which should not contain a leading dot."
@@ -319,7 +326,8 @@ DEFAULT-EXTENSION, which should not contain a leading dot."
                      default-extension)))
     (make-temp-file "reformatter" nil
                     (when extension
-                      (concat "." extension)))))
+                      (concat "." extension))
+                    text)))
 
 (provide 'reformatter)
 ;;; reformatter.el ends here
