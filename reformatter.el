@@ -120,10 +120,12 @@ the `reformatter-define' macro."
                     ;; disruption to marker positions and the
                     ;; undo list
                     (narrow-to-region beg end)
-                    (reformatter-replace-buffer-contents-from-file
-                     (if (functionp output-processor)
-                         (funcall output-processor input-file (if stdout stdout-file input-file))
-                       input-file)))
+                    (let ((output-file (if stdout stdout-file input-file)))
+                      (if (functionp output-processor)
+                          (let ((processed-output-file (funcall output-processor output-file)))
+                            (when processed-output-file
+                              (reformatter-replace-buffer-contents-from-file processed-output-file)))
+                        (reformatter-replace-buffer-contents-from-file output-file))))
                   ;; If there are no errors then we hide the error buffer
                   (delete-windows-on error-buffer))
               (if display-errors
