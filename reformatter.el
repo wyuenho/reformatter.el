@@ -240,7 +240,7 @@ OUTPUT-PROCESSOR
   If provided, this is a function that takes the output PROGRAM,
   do some arbitrary processing to it, and then return the final
   output.  If not supplied, the output is returned as is."
-  (declare (indent defun) (debug (name :program :args :mode :group :lighter :keymap :exit-code-success-p :output-processor)))
+  (declare (indent defun) (debug (name :program :args :mode :stdin :stdout :input-file :lighter :keymap :group :exit-code-success-p :output-processor)))
   (cl-assert (symbolp name))
   (cl-assert (functionp exit-code-success-p))
   (cl-assert (or (null output-processor) (functionp exit-code-success-p)))
