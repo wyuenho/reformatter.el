@@ -84,7 +84,7 @@ EXIT-CODE-SUCCESS-P and DISPLAY-ERRORS see the documentation of
 the `reformatter-define' macro."
   (cl-assert input-file)
   (cl-assert (functionp exit-code-success-p))
-  (cl-assert (functionp output-processor))
+  (cl-assert (or (null output-processor) (functionp exit-code-success-p)))
   (when (and input-file
              (buffer-file-name)
              (string= (file-truename input-file)
@@ -240,9 +240,10 @@ OUTPUT-PROCESSOR
   If provided, this is a function that takes the output PROGRAM,
   do some arbitrary processing to it, and then return the final
   output.  If not supplied, the output is returned as is."
-  (declare (indent defun) (debug (name :program :args :mode :group :lighter :keymap :exit-code-success-p :output-post-processor)))
+  (declare (indent defun) (debug (name :program :args :mode :group :lighter :keymap :exit-code-success-p :output-processor)))
   (cl-assert (symbolp name))
   (cl-assert (functionp exit-code-success-p))
+  (cl-assert (or (null output-processor) (functionp exit-code-success-p)))
   (cl-assert program)
   ;; Note: we skip using `gensym' here because the macro arguments are only
   ;; referred to once below, but this may have to change later.
